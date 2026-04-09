@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Life Tracker</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g1:#1a3a1c;--g2:#2d6a30;--g3:#4caf50;--g4:#81c784;--g5:#c8e6c9;--g6:#f1f8f1;
+  --red:#e53935;--red-s:#ffebee;
+  --blue:#1565c0;--blue-s:#e3f2fd;
+  --orange:#e65100;--orange-s:#fff3e0;
+  --brown:#5d4037;
+  --white:#fff;--text:#1a2e1b;--muted:#6b9b6d;--border:#d0e8d1;
+  --bg:#f0f7f0;--card:#fff;
+  --sh:0 1px 8px rgba(26,58,28,.08);
+  --r:16px;--rs:11px;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+html,body{height:100%;overflow:hidden;font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);}
+body{display:flex;flex-direction:column;height:100svh;}
+
+/* ── TOPBAR ── */
+.tb{background:var(--g1);padding:10px 16px 8px;padding-top:calc(10px + var(--safe-t));
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  position:fixed;top:0;left:0;right:0;z-index:100;}
+.tb-title{font-size:17px;font-weight:900;color:#fff;letter-spacing:-.3px;}
+.tb-date{font-size:10px;color:var(--g4);font-weight:600;margin-top:1px;}
+.tb-sync{background:rgba(255,255,255,.12);border:none;border-radius:9px;color:#fff;
+  font-size:17px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.tb-sync:active{background:rgba(255,255,255,.25);}
+.tb-sync.spin{animation:spin .9s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── BOTTOM NAV ── */
+.bnav{background:var(--g1);display:flex;padding:6px 4px;padding-bottom:calc(6px + var(--safe-b));
+  flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);
+  position:fixed;bottom:0;left:0;right:0;z-index:100;}
+.bn{flex:1;background:none;border:none;color:rgba(255,255,255,.5);
+  font-family:'Nunito',sans-serif;font-size:9px;font-weight:800;
+  padding:5px 2px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;
+  border-radius:9px;transition:all .15s;min-width:0;}
+.bn-ico{font-size:18px;line-height:1;}
+.bn.on{background:rgba(76,175,80,.25);color:#fff;}
+
+/* ── PAGES ── */
+.pages{position:fixed;top:0;left:0;right:0;bottom:0;
+  padding-top:56px;/* topbar height */
+  padding-bottom:calc(58px + var(--safe-b));/* bottom nav height */
+  overflow:hidden;}
+.pg{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+  padding:12px 12px 24px;
+  display:none;flex-direction:column;gap:11px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+.pg.on{display:flex;}
+
+/* ── CARD ── */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;}
+.ch{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+.ch.green{background:linear-gradient(135deg,var(--g1),var(--g2));}
+.ch.red{background:linear-gradient(135deg,#b71c1c,var(--red));}
+.ch.blue{background:linear-gradient(135deg,#0d47a1,var(--blue));}
+.ch.orange{background:linear-gradient(135deg,#bf360c,var(--orange));}
+.ch.brown{background:linear-gradient(135deg,#3e2723,var(--brown));}
+.ch-t{font-size:13px;font-weight:800;color:#fff;}
+.ch-b{background:rgba(255,255,255,.18);color:#fff;font-size:10px;font-weight:800;
+  padding:3px 9px;border-radius:99px;white-space:nowrap;}
+.cb{padding:12px;}
+
+/* ── RINGS ── */
+.rings{display:flex;justify-content:space-around;padding:4px 0;}
+.ring-w{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.ring-lbl{font-size:10px;font-weight:700;color:var(--muted);}
+svg.ring{transform:rotate(-90deg);}
+.rbg{fill:none;stroke:var(--g5);}
+.rfill{fill:none;stroke:var(--g2);stroke-linecap:round;transition:stroke-dashoffset .7s cubic-bezier(.4,0,.2,1);}
+.rpct{dominant-baseline:middle;text-anchor:middle;transform:rotate(90deg);transform-origin:center;
+  font-family:'Nunito',sans-serif;font-weight:900;fill:var(--g1);}
+.rsub{dominant-baseline:middle;text-anchor:middle;transform:rotate(90deg);transform-origin:center;
+  font-family:'Nunito',sans-serif;font-weight:600;fill:var(--muted);}
+
+/* ── WEEK STRIP ── */
+.ws{display:flex;gap:5px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none;}
+.ws::-webkit-scrollbar{display:none;}
+.dc{flex-shrink:0;width:40px;background:var(--g6);border-radius:10px;padding:6px 3px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;
+  border:2px solid transparent;transition:all .15s;}
+.dc.tod{background:var(--g5);}
+.dc.sel{border-color:var(--g2);}
+.dc-n{font-size:8px;font-weight:800;color:var(--muted);text-transform:uppercase;}
+.dc-d{font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.dc-p{font-size:9px;font-weight:800;color:var(--g2);}
+
+/* ── PROG BAR ── */
+.pbar{height:3px;background:var(--g5);border-radius:99px;overflow:hidden;margin:0 14px 8px;}
+.pfill{height:100%;background:linear-gradient(90deg,var(--g1),var(--g3));border-radius:99px;transition:width .4s;}
+
+/* ── TASKS ── */
+.tlist{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}
+.ti{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--rs);
+  background:var(--g6);cursor:pointer;}
+.ti:active{opacity:.7;}
+.ti.done{opacity:.45;}
+.ti.done .ti-t{text-decoration:line-through;color:var(--muted);}
+.tck{width:20px;height:20px;flex-shrink:0;border:2px solid var(--g4);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;}
+.ti.done .tck{background:var(--g2);border-color:var(--g2);}
+.tck-m{display:none;color:#fff;font-size:11px;font-weight:900;}
+.ti.done .tck-m{display:block;}
+.ti-t{font-size:13px;font-weight:600;flex:1;line-height:1.3;}
+.ti-del{background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:2px 4px;flex-shrink:0;}
+.ti-del:active{color:var(--red);}
+.arow{display:flex;gap:7px;}
+.ainp{flex:1;border:1.5px solid var(--border);border-radius:var(--rs);padding:9px 11px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;
+  background:var(--g6);color:var(--text);outline:none;}
+.ainp:focus{border-color:var(--g2);}
+.abtn{background:var(--g2);color:#fff;border:none;border-radius:var(--rs);
+  width:40px;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.abtn:active{background:var(--g1);}
+
+/* ── HABITS ── */
+.hr{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--g5);}
+.hr:last-child{border-bottom:none;}
+.hn{font-size:11px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hdots{display:flex;gap:3px;flex-shrink:0;}
+.hd{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border);background:var(--g6);
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;
+  color:var(--muted);cursor:pointer;flex-shrink:0;}
+.hd.on{background:var(--g2);border-color:var(--g2);color:#fff;}
+.hd:active{transform:scale(.84);}
+.hstr{font-size:10px;font-weight:800;color:var(--g2);font-family:'JetBrains Mono',monospace;
+  flex-shrink:0;min-width:22px;text-align:right;}
+
+/* ── PROJECTS ── */
+.pc{background:var(--g6);border-radius:var(--rs);overflow:hidden;border:1px solid var(--border);}
+.ph{display:flex;align-items:center;gap:8px;padding:10px 11px;cursor:pointer;}
+.pdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.pn{font-size:13px;font-weight:800;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pmeta{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-shrink:0;}
+.pdl{font-size:9px;color:var(--muted);font-weight:600;flex-shrink:0;}
+.pdl.ov{color:var(--red);}
+.ppbar{height:3px;background:var(--border);margin:0 11px 6px;}
+.ppfill{height:100%;border-radius:99px;transition:width .4s;}
+.ptasks{padding:0 10px 8px;display:flex;flex-direction:column;gap:5px;}
+.ptasks.hide{display:none;}
+.pt{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:var(--white);cursor:pointer;}
+.pt:active{opacity:.7;}
+.pt.done{opacity:.45;}
+.pt.done .pt-t{text-decoration:line-through;color:var(--muted);}
+.ptck{width:18px;height:18px;flex-shrink:0;border:2px solid var(--g4);border-radius:5px;
+  display:flex;align-items:center;justify-content:center;}
+.pt.done .ptck{background:var(--g2);border-color:var(--g2);}
+.ptck-m{display:none;color:#fff;font-size:10px;font-weight:900;}
+.pt.done .ptck-m{display:block;}
+.pt-t{font-size:12px;font-weight:600;flex:1;line-height:1.3;}
+.pt-del{background:none;border:none;color:#ccc;font-size:14px;cursor:pointer;padding:2px;flex-shrink:0;}
+.pt-del:active{color:var(--red);}
+.parow{display:flex;gap:6px;margin-top:4px;}
+.painp{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:7px 9px;
+  font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;
+  background:var(--white);color:var(--text);outline:none;}
+.painp:focus{border-color:var(--g2);}
+.pabtn{background:var(--g2);color:#fff;border:none;border-radius:8px;
+  width:33px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.pabtn:active{background:var(--g1);}
+.cpick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;}
+.co{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;}
+.co.sel{border-color:var(--text);transform:scale(1.12);}
+
+/* ── HEALTH ── */
+/* Stack all metrics vertically — NO grid on mobile */
+.hm{background:var(--g6);border-radius:var(--rs);padding:12px;margin-bottom:8px;}
+.hm:last-child{margin-bottom:0;}
+.hm-ico{font-size:20px;margin-bottom:4px;}
+.hm-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;}
+.hm-unit{font-size:10px;color:var(--muted);font-weight:600;margin-top:3px;}
+
+/* Number input */
+.hinp{border:1.5px solid var(--border);border-radius:9px;padding:10px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;
+  background:var(--white);color:var(--text);outline:none;width:100%;}
+.hinp:focus{border-color:var(--g2);}
+.hinp.red:focus{border-color:var(--red);}
+.hinp.blue:focus{border-color:var(--blue);}
+
+/* Two-col inside health metric */
+.hm2{display:flex;gap:8px;}
+.hm2 > *{flex:1;}
+
+/* Mood */
+.mood-row{display:flex;gap:6px;justify-content:center;}
+.mbtn{font-size:28px;background:var(--g6);border:2px solid transparent;border-radius:13px;
+  padding:7px 8px;cursor:pointer;}
+.mbtn:active{transform:scale(.9);}
+.mbtn.on{border-color:var(--g2);background:var(--g5);transform:scale(1.1);}
+
+/* Slider */
+.slrow{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.sl-lbl{font-size:11px;font-weight:700;color:var(--muted);width:64px;flex-shrink:0;}
+.sl{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;background:var(--g5);outline:none;}
+.sl::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+  background:var(--g2);cursor:pointer;box-shadow:0 2px 8px rgba(45,106,48,.3);}
+.sl-val{font-size:12px;font-weight:800;color:var(--g1);font-family:'JetBrains Mono',monospace;
+  width:22px;text-align:center;flex-shrink:0;}
+
+/* Toggle pills */
+.tprow{display:flex;gap:6px;flex-wrap:wrap;}
+.tp{padding:8px 12px;border-radius:99px;border:2px solid var(--border);background:var(--g6);
+  font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.tp:active{transform:scale(.95);}
+.tp.gr{background:var(--g2);border-color:var(--g2);color:#fff;}
+.tp.rd{background:var(--red);border-color:var(--red);color:#fff;}
+.tp.or{background:var(--orange);border-color:var(--orange);color:#fff;}
+
+/* Counter +/- */
+.counter{display:flex;align-items:center;gap:10px;margin-top:6px;}
+.cnt-btn{background:var(--g5);border:none;border-radius:9px;width:38px;height:38px;
+  font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0;}
+.cnt-btn.plus{background:var(--g2);color:#fff;}
+.cnt-btn:active{opacity:.7;}
+.cnt-val{font-size:32px;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--g1);flex:1;text-align:center;}
+
+/* BP */
+.bprow{display:flex;align-items:center;gap:7px;margin-bottom:10px;}
+.bpinp{flex:1;border:1.5px solid var(--border);border-radius:9px;padding:10px 8px;
+  font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;
+  background:var(--white);color:var(--text);outline:none;text-align:center;}
+.bpinp:focus{border-color:var(--red);}
+.bpsep{font-size:20px;font-weight:900;color:var(--muted);}
+.bpbtn{background:var(--red);color:#fff;border:none;border-radius:9px;padding:10px 14px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.bpbtn:active{opacity:.8;}
+.bpe{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;
+  background:var(--red-s);border-radius:8px;margin-bottom:5px;}
+.bpe-v{font-size:17px;font-weight:900;color:var(--red);font-family:'JetBrains Mono',monospace;}
+.bpe-d{font-size:10px;color:var(--muted);font-weight:600;}
+.bpe-x{background:none;border:none;color:#ccc;font-size:14px;cursor:pointer;padding:2px 4px;}
+.bpe-x:active{color:var(--red);}
+
+/* Headache */
+.hce{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;
+  background:var(--red-s);border-radius:8px;border-left:3px solid var(--red);margin-bottom:5px;}
+.hce-d{font-size:11px;font-weight:700;color:var(--red);}
+.hce-i{font-size:11px;font-weight:600;}
+
+/* Meds */
+.med{display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--blue-s);border-radius:9px;margin-bottom:6px;}
+.medck{width:21px;height:21px;border-radius:6px;border:2px solid var(--blue);background:var(--white);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.medck.on{background:var(--blue);border-color:var(--blue);}
+.medck-m{display:none;color:#fff;font-size:11px;font-weight:900;}
+.medck.on .medck-m{display:block;}
+.med-n{font-size:13px;font-weight:700;flex:1;}
+.med-x{background:none;border:none;color:#ccc;font-size:15px;cursor:pointer;padding:2px 4px;}
+.med-x:active{color:var(--red);}
+
+/* Steps bar */
+.sbar{height:8px;background:var(--g5);border-radius:99px;overflow:hidden;margin-top:6px;}
+.sbar-f{height:100%;background:linear-gradient(90deg,var(--orange),#ffc107);border-radius:99px;transition:width .5s;}
+
+/* Notes textarea */
+.nta{width:100%;border:1.5px solid var(--border);border-radius:var(--rs);padding:10px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;resize:none;
+  background:var(--g6);color:var(--text);outline:none;min-height:68px;}
+.nta:focus{border-color:var(--g2);}
+
+/* ── ANALYSIS ── */
+.ab{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.ab-n{font-size:11px;font-weight:700;color:var(--muted);width:85px;flex-shrink:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ab-tr{flex:1;height:9px;background:var(--g5);border-radius:99px;overflow:hidden;}
+.ab-f{height:100%;background:linear-gradient(90deg,var(--g1),var(--g3));border-radius:99px;transition:width .5s;}
+.ab-p{font-size:11px;font-weight:800;color:var(--g1);font-family:'JetBrains Mono',monospace;
+  width:30px;text-align:right;flex-shrink:0;}
+
+/* Stat pills */
+.spills{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:4px;}
+.sp{background:var(--g6);border-radius:12px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.sp-n{font-size:18px;font-weight:900;color:var(--g1);font-family:'JetBrains Mono',monospace;}
+.sp-l{font-size:9px;font-weight:700;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.4px;}
+
+/* ── UTILS ── */
+.sec{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:6px;margin-top:2px;}
+.div{height:1px;background:var(--g5);margin:8px 0;}
+.empty{text-align:center;color:var(--muted);padding:18px 0;font-size:13px;}
+
+/* Toast */
+.toast{position:fixed;bottom:calc(80px + var(--safe-b));left:50%;
+  transform:translateX(-50%) translateY(16px);opacity:0;
+  background:var(--g1);color:#fff;font-size:13px;font-weight:700;
+  padding:9px 18px;border-radius:99px;pointer-events:none;z-index:9999;
+  transition:all .25s;white-space:nowrap;}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* new proj inputs */
+.npf input[type=text],.npf input[type=date]{
+  border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;
+  background:var(--g6);color:var(--text);outline:none;width:100%;margin-bottom:8px;}
+.npf input:focus{border-color:var(--g2);}
+.wbtn{width:100%;border-radius:10px;height:40px;font-size:14px;font-weight:800;
+  background:var(--g2);color:#fff;border:none;cursor:pointer;}
+.wbtn:active{background:var(--g1);}
+</style>
+</head>
+<body>
+
+<div class="tb">
+  <div>
+    <div class="tb-title">🌱 Life Tracker</div>
+    <div class="tb-date" id="tbDate"></div>
+  </div>
+  <button class="tb-sync" id="syncBtn" onclick="syncData()">↻</button>
+</div>
+
+<div class="pages">
+
+  <!-- HOME -->
+  <div class="pg on" id="pg-home">
+    <div class="card">
+      <div class="ch green"><span class="ch-t">Прогресс недели</span><span class="ch-b" id="wBadge">0/0</span></div>
+      <div class="cb"><div class="rings" id="homeRings"></div></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t">Дни недели</span></div>
+      <div class="cb" style="padding-bottom:6px"><div class="ws" id="homeWs"></div></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t" id="homeDayTitle">Сегодня</span><span class="ch-b" id="homePct">0%</span></div>
+      <div class="pbar"><div class="pfill" id="homeBar" style="width:0%"></div></div>
+      <div class="cb" style="padding-top:0">
+        <div class="sec">Задачи</div>
+        <div class="tlist" id="homeTasks"></div>
+        <div class="arow">
+          <input class="ainp" id="homeInp" placeholder="Добавить задачу..." maxlength="80" onkeydown="if(event.key==='Enter')quickAdd()">
+          <button class="abtn" onclick="quickAdd()">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="pg" id="pg-tasks">
+    <div class="card">
+      <div class="ch green"><span class="ch-t">Выбери день</span></div>
+      <div class="cb" style="padding-bottom:6px"><div class="ws" id="taskWs"></div></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t" id="taskTitle">Задачи</span><span class="ch-b" id="taskPct">0%</span></div>
+      <div class="pbar"><div class="pfill" id="taskBar" style="width:0%"></div></div>
+      <div class="cb">
+        <div class="tlist" id="taskList"></div>
+        <div class="arow">
+          <input class="ainp" id="taskInp" placeholder="Новая задача..." maxlength="80" onkeydown="if(event.key==='Enter')addTask()">
+          <button class="abtn" onclick="addTask()">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HABITS -->
+  <div class="pg" id="pg-habits">
+    <div class="card">
+      <div class="ch green"><span class="ch-t">Трекер привычек</span><span class="ch-b" id="habPct">0%</span></div>
+      <div class="cb" id="habGrid"></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t">+ Добавить привычку</span></div>
+      <div class="cb">
+        <div class="arow">
+          <input class="ainp" id="habInp" placeholder="Новая привычка..." maxlength="40" onkeydown="if(event.key==='Enter')addHabit()">
+          <button class="abtn" onclick="addHabit()">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="pg" id="pg-projects">
+    <div class="card">
+      <div class="ch green"><span class="ch-t">🗂 Проекты</span><span class="ch-b" id="projBadge">0</span></div>
+      <div class="cb"><div id="projList"><div class="empty">Создай первый проект ниже ↓</div></div></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t">+ Новый проект</span></div>
+      <div class="cb">
+        <div class="npf">
+          <input type="text" id="pjName" placeholder="Название проекта..." maxlength="50">
+          <input type="date" id="pjDl">
+          <div class="sec">Цвет</div>
+          <div class="cpick" id="cpick"></div>
+          <button class="wbtn" onclick="addProject()">Создать проект</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEALTH -->
+  <div class="pg" id="pg-health">
+
+    <!-- Mood -->
+    <div class="card">
+      <div class="ch green"><span class="ch-t">😊 Настроение</span></div>
+      <div class="cb">
+        <div class="mood-row" id="moodRow"></div>
+        <div style="margin-top:12px">
+          <div class="slrow">
+            <div class="sl-lbl">⚡ Энергия</div>
+            <input type="range" class="sl" id="slE" min="1" max="5" value="3" oninput="onSl('energy',this.value,'svE')">
+            <div class="sl-val" id="svE">3</div>
+          </div>
+          <div class="slrow">
+            <div class="sl-lbl">😰 Стресс</div>
+            <input type="range" class="sl" id="slS" min="1" max="5" value="3" oninput="onSl('stress',this.value,'svS')">
+            <div class="sl-val" id="svS">3</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sleep -->
+    <div class="card">
+      <div class="ch blue"><span class="ch-t">😴 Сон</span><span class="ch-b" id="slpBadge">— ч</span></div>
+      <div class="cb">
+        <div class="hm">
+          <div class="hm-lbl">🛌 Часов сна</div>
+          <input class="hinp blue" id="hSlpH" type="number" min="0" max="24" step="0.5" placeholder="7.5"
+            oninput="saveH('sleepHours',this.value)">
+          <div class="hm-unit">часов</div>
+        </div>
+        <div class="hm">
+          <div class="hm-lbl">⭐ Качество сна (1–5)</div>
+          <div class="slrow" style="margin-bottom:0">
+            <input type="range" class="sl" id="slQ" min="1" max="5" value="3"
+              oninput="onSl('sleepQuality',this.value,'svQ')">
+            <div class="sl-val" id="svQ">3</div>
+          </div>
+        </div>
+        <div class="hm2">
+          <div class="hm">
+            <div class="hm-lbl">⏰ Лёг спать</div>
+            <input class="hinp" id="hSlpT" type="time" oninput="saveH('sleepTime',this.value)">
+          </div>
+          <div class="hm">
+            <div class="hm-lbl">🌅 Проснулся</div>
+            <input class="hinp" id="hWake" type="time" oninput="saveH('wakeTime',this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="card">
+      <div class="ch orange"><span class="ch-t">👟 Шаги</span><span class="ch-b" id="stpBadge">0</span></div>
+      <div class="cb">
+        <div class="hm">
+          <div class="hm-lbl">🚶 Шагов за день</div>
+          <input class="hinp" id="hSteps" type="number" min="0" max="99999" placeholder="10000"
+            oninput="saveH('steps',this.value)">
+          <div class="sbar"><div class="sbar-f" id="sbarF" style="width:0%"></div></div>
+          <div class="hm-unit">Цель: 10 000 шагов</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blood pressure -->
+    <div class="card">
+      <div class="ch red"><span class="ch-t">🩸 Давление</span></div>
+      <div class="cb">
+        <div class="sec">Новый замер</div>
+        <div class="bprow">
+          <input class="bpinp" id="bpS" type="number" min="60" max="250" placeholder="120">
+          <div class="bpsep">/</div>
+          <input class="bpinp" id="bpD" type="number" min="40" max="150" placeholder="80">
+          <button class="bpbtn" onclick="addBP()">Записать</button>
+        </div>
+        <div id="bpHist"></div>
+      </div>
+    </div>
+
+    <!-- Headache -->
+    <div class="card">
+      <div class="ch red"><span class="ch-t">🤕 Головная боль</span><span class="ch-b" id="hcBadge">Нет</span></div>
+      <div class="cb">
+        <div class="sec">Интенсивность сегодня</div>
+        <div class="tprow" id="hcRow">
+          <div class="tp" data-hc="0">😊 Нет</div>
+          <div class="tp" data-hc="1">😐 Слабая</div>
+          <div class="tp" data-hc="2">😣 Средняя</div>
+          <div class="tp" data-hc="3">🤯 Сильная</div>
+        </div>
+        <div class="div"></div>
+        <div class="sec">История недели</div>
+        <div id="hcLog"></div>
+      </div>
+    </div>
+
+    <!-- Smoking -->
+    <div class="card">
+      <div class="ch brown"><span class="ch-t">🚬 Курение</span><span class="ch-b" id="smkBadge">0 сиг.</span></div>
+      <div class="cb">
+        <div class="hm">
+          <div class="hm-lbl">🚬 Сигарет сегодня</div>
+          <div class="counter">
+            <button class="cnt-btn" id="smkMinus" onclick="changeSmoke(-1)">−</button>
+            <div class="cnt-val" id="smkVal">0</div>
+            <button class="cnt-btn plus" id="smkPlus" onclick="changeSmoke(1)">+</button>
+          </div>
+        </div>
+        <div class="hm">
+          <div class="hm-lbl">🚫 День без курения</div>
+          <div class="tprow" style="margin-top:6px">
+            <div class="tp" id="sfTp" onclick="toggleSmokeFree()">Отметить ✓</div>
+          </div>
+          <div class="hm-unit" id="sfStreak" style="margin-top:5px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meds -->
+    <div class="card">
+      <div class="ch blue"><span class="ch-t">💊 Лекарства</span><span class="ch-b" id="medBadge">0/0</span></div>
+      <div class="cb">
+        <div id="medList"></div>
+        <div class="arow" style="margin-top:6px">
+          <input class="ainp" id="medInp" placeholder="Название лекарства..." maxlength="40"
+            onkeydown="if(event.key==='Enter')addMed()">
+          <button class="abtn" onclick="addMed()">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="ch green"><span class="ch-t">📝 Заметки</span></div>
+      <div class="cb" style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div class="sec">Итог дня</div>
+          <textarea class="nta" id="nMain" placeholder="Как прошёл день?" rows="3"
+            onchange="saveNote('main',this.value)"></textarea>
+        </div>
+        <div>
+          <div class="sec">🏆 Победы</div>
+          <textarea class="nta" id="nWins" placeholder="Что получилось?" rows="2"
+            onchange="saveNote('wins',this.value)"></textarea>
+        </div>
+        <div>
+          <div class="sec">🙏 Благодарность</div>
+          <textarea class="nta" id="nThnk" placeholder="За что благодарен?" rows="2"
+            onchange="saveNote('thanks',this.value)"></textarea>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /health -->
+
+  <!-- STATS -->
+  <div class="pg" id="pg-stats">
+    <div class="card">
+      <div class="ch green"><span class="ch-t">📊 Итоги недели</span></div>
+      <div class="cb"><div class="spills" id="spills"></div></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t">🔥 Привычки</span></div>
+      <div class="cb" id="stHab"></div>
+    </div>
+    <div class="card">
+      <div class="ch green"><span class="ch-t">✅ Задачи по дням</span></div>
+      <div class="cb" id="stTask"></div>
+    </div>
+    <div class="card">
+      <div class="ch blue"><span class="ch-t">❤️ Здоровье — неделя</span></div>
+      <div class="cb" id="stHealth"></div>
+    </div>
+  </div>
+
+</div><!-- /pages -->
+
+<!-- BOTTOM NAV -->
+<div class="bnav">
+  <button class="bn on" id="bn-home" onclick="nav('home')"><span class="bn-ico">🏠</span>Главная</button>
+  <button class="bn" id="bn-tasks" onclick="nav('tasks')"><span class="bn-ico">✅</span>Задачи</button>
+  <button class="bn" id="bn-habits" onclick="nav('habits')"><span class="bn-ico">🔥</span>Привычки</button>
+  <button class="bn" id="bn-projects" onclick="nav('projects')"><span class="bn-ico">🗂</span>Проекты</button>
+  <button class="bn" id="bn-health" onclick="nav('health')"><span class="bn-ico">❤️</span>Здоровье</button>
+  <button class="bn" id="bn-stats" onclick="nav('stats')"><span class="bn-ico">📈</span>Анализ</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── TELEGRAM ──
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+// ── CONSTANTS ──
+const DMON = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const DFULL = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const MOODS = ['😫','😞','😐','🙂','😄'];
+const MOOD_L = ['Ужасно','Плохо','Нейтрально','Хорошо','Отлично'];
+const HC_L = ['Нет боли','Слабая','Средняя','Сильная'];
+const HC_C = ['gr','gr','or','rd'];
+const DEF_HAB = ['☀️ Встать в 06:00','🚿 Холодный душ','🍺 Без алкоголя','📵 Без соц. сетей 1ч','🏋️ Спорт / зал','📚 Чтение','🗣️ Английский','💧 2л воды'];
+const PCOLS = ['#2d6a30','#1565c0','#e53935','#e65100','#7b1fa2','#00838f','#ad1457','#37474f'];
+const SK = 'lt_v4'; const CK = 'lt_v4_cloud';
+
+// ── STATE ──
+let D = {}, HAB = [], PROJ = [], MEDS = [];
+let selDay = 0, selTaskDay = 0, WD = [];
+let selCol = PCOLS[0], curPage = 'home';
+
+// ── DATE ──
+function tod() { const d = new Date(); d.setHours(0,0,0,0); return d; }
+function dk(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function getWD() {
+  const t = tod(); const mon = new Date(t);
+  mon.setDate(t.getDate() - ((t.getDay()+6)%7));
+  return Array.from({length:7}, (_,i) => { const d = new Date(mon); d.setDate(mon.getDate()+i); return d; });
+}
+function dd(key) {
+  if (!D[key]) D[key] = {tasks:[],habits:{},mood:null,energy:3,stress:3,
+    sleepHours:'',sleepTime:'',wakeTime:'',sleepQuality:3,steps:'',
+    bp:[],headache:null,smoke:0,smokeFree:false,medsChecked:{},notes:{}};
+  return D[key];
+}
+function todayIdx() { const t = tod(); const i = WD.findIndex(d => d.getTime()===t.getTime()); return i>=0?i:0; }
+
+// ── STORAGE ──
+function save() { try { localStorage.setItem(SK, JSON.stringify({D,HAB,PROJ,MEDS})); } catch(e){} }
+function load() {
+  try {
+    const r = localStorage.getItem(SK);
+    if (r) { const p = JSON.parse(r); D=p.D||{}; HAB=p.HAB||[...DEF_HAB]; PROJ=p.PROJ||[]; MEDS=p.MEDS||[]; return true; }
+  } catch(e) {}
+  return false;
+}
+function hasTg() { return !!(tg && tg.CloudStorage); }
+function cloudSave(cb) {
+  if (!hasTg()) { save(); cb&&cb(); return; }
+  tg.CloudStorage.setItem(CK, JSON.stringify({D,HAB,PROJ,MEDS}), err => { save(); cb&&cb(err); });
+}
+function cloudLoad(cb) {
+  if (!hasTg()) { load(); cb(); return; }
+  tg.CloudStorage.getItem(CK, (err, val) => {
+    if (!err && val) {
+      try { const p = JSON.parse(val); D=p.D||{}; HAB=p.HAB||[...DEF_HAB]; PROJ=p.PROJ||[]; MEDS=p.MEDS||[]; save(); }
+      catch(e) { load(); }
+    } else { load(); }
+    cb();
+  });
+}
+function syncData() {
+  const btn = document.getElementById('syncBtn');
+  btn.classList.add('spin');
+  cloudSave(err => { btn.classList.remove('spin'); toast(err ? '❌ Ошибка' : '✅ Синхронизировано'); });
+}
+
+// ── TOAST ──
+let tTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(tTimer); tTimer = setTimeout(() => el.classList.remove('on'), 2200);
+}
+
+// ── NAV ──
+function nav(name) {
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.bn').forEach(b => b.classList.remove('on'));
+  document.getElementById('pg-'+name).classList.add('on');
+  document.getElementById('bn-'+name).classList.add('on');
+  curPage = name;
+  if (name==='habits') renderHabits();
+  if (name==='health') renderHealth();
+  if (name==='projects') renderProjects();
+  if (name==='tasks') renderTasks();
+  if (name==='stats') renderStats();
+}
+
+// ── INIT ──
+function init() {
+  WD = getWD();
+  selDay = todayIdx();
+  selTaskDay = selDay;
+  document.getElementById('tbDate').textContent = tod().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  initCpick();
+  initHcButtons();
+  renderHome();
+  renderTasks();
+}
+
+// ── HOME ──
+function renderHome() {
+  renderStrip('homeWs', selDay, i => { selDay=i; renderHome(); });
+  renderRings();
+  renderHomeTasks();
+}
+function renderStrip(id, sel, onClick) {
+  const el = document.getElementById(id); el.innerHTML = '';
+  const t = tod();
+  WD.forEach((d, i) => {
+    const data = dd(dk(d));
+    const done = data.tasks.filter(x=>x.done).length; const total = data.tasks.length;
+    const pct = total ? Math.round(done/total*100) : 0;
+    const chip = document.createElement('div');
+    chip.className = 'dc' + (d.getTime()===t.getTime()?' tod':'') + (i===sel?' sel':'');
+    chip.innerHTML = `<div class="dc-n">${DMON[i]}</div><div class="dc-d">${d.getDate()}</div><div class="dc-p">${total?pct+'%':'—'}</div>`;
+    chip.onclick = () => onClick(i);
+    el.appendChild(chip);
+  });
+  setTimeout(() => {
+    const chips = el.querySelectorAll('.dc');
+    if (chips[sel]) chips[sel].scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+  }, 60);
+}
+function renderRings() {
+  let wD=0,wT=0,hD=0,hT=0;
+  WD.forEach(d => {
+    const data = dd(dk(d));
+    wD += data.tasks.filter(x=>x.done).length; wT += data.tasks.length;
+    HAB.forEach((_,i) => { hT++; if(data.habits[i]) hD++; });
+  });
+  let pD=0,pT=0; PROJ.forEach(p=>p.tasks.forEach(t=>{pT++;if(t.done)pD++;}));
+  document.getElementById('wBadge').textContent = `${wD}/${wT}`;
+  document.getElementById('homeRings').innerHTML =
+    ring(wT?Math.round(wD/wT*100):0, 72, 'Задачи') +
+    ring(hT?Math.round(hD/hT*100):0, 72, 'Привычки') +
+    ring(pT?Math.round(pD/pT*100):0, 72, 'Проекты');
+  animRings();
+}
+function ring(pct, sz, lbl) {
+  const r=sz/2-6; const c=+(2*Math.PI*r).toFixed(2); const off=+(c-pct/100*c).toFixed(2);
+  return `<div class="ring-w"><svg class="ring" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">
+    <circle class="rbg" cx="${sz/2}" cy="${sz/2}" r="${r}" stroke-width="6"/>
+    <circle class="rfill" cx="${sz/2}" cy="${sz/2}" r="${r}" stroke-width="6"
+      stroke-dasharray="${c}" stroke-dashoffset="${c}" data-off="${off}"/>
+    <text class="rpct" x="${sz/2}" y="${sz/2-4}" font-size="14">${pct}%</text>
+    <text class="rsub" x="${sz/2}" y="${sz/2+12}" font-size="9">${lbl}</text>
+  </svg></div>`;
+}
+function animRings() {
+  document.querySelectorAll('.rfill').forEach(el => {
+    const off = el.getAttribute('data-off');
+    setTimeout(() => { el.style.strokeDashoffset = off; }, 70);
+  });
+}
+function renderHomeTasks() {
+  const key = dk(WD[selDay]); const data = dd(key);
+  const done = data.tasks.filter(x=>x.done).length; const total = data.tasks.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const d = WD[selDay];
+  document.getElementById('homeDayTitle').textContent = DFULL[d.getDay()]+' '+d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+  document.getElementById('homePct').textContent = pct+'%';
+  document.getElementById('homeBar').style.width = pct+'%';
+  const list = document.getElementById('homeTasks'); list.innerHTML = '';
+  data.tasks.forEach((t,i) => list.appendChild(makeTask(t,i,key)));
+}
+function makeTask(t,i,key) {
+  const div = document.createElement('div');
+  div.className = 'ti'+(t.done?' done':'');
+  div.innerHTML = `<div class="tck"><span class="tck-m">✓</span></div><div class="ti-t">${esc(t.text)}</div><button class="ti-del">×</button>`;
+  div.querySelector('.tck').parentElement.onclick = () => { dd(key).tasks[i].done=!dd(key).tasks[i].done; cloudSave(()=>{}); rerender(); };
+  div.querySelector('.ti-del').onclick = e => { e.stopPropagation(); dd(key).tasks.splice(i,1); cloudSave(()=>{}); rerender(); };
+  return div;
+}
+function quickAdd() {
+  const inp = document.getElementById('homeInp'); const v = inp.value.trim(); if(!v) return;
+  dd(dk(WD[selDay])).tasks.push({text:v,done:false}); inp.value='';
+  cloudSave(()=>{}); rerender();
+}
+
+// ── TASKS ──
+function renderTasks() {
+  renderStrip('taskWs', selTaskDay, i => { selTaskDay=i; renderTasks(); });
+  const key = dk(WD[selTaskDay]); const data = dd(key);
+  const done = data.tasks.filter(x=>x.done).length; const total = data.tasks.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('taskTitle').textContent = DFULL[WD[selTaskDay].getDay()];
+  document.getElementById('taskPct').textContent = pct+'%';
+  document.getElementById('taskBar').style.width = pct+'%';
+  const list = document.getElementById('taskList'); list.innerHTML = '';
+  data.tasks.forEach((t,i) => list.appendChild(makeTask(t,i,key)));
+}
+function addTask() {
+  const inp = document.getElementById('taskInp'); const v = inp.value.trim(); if(!v) return;
+  dd(dk(WD[selTaskDay])).tasks.push({text:v,done:false}); inp.value='';
+  cloudSave(()=>{}); rerender();
+}
+
+// ── HABITS ──
+function renderHabits() {
+  const grid = document.getElementById('habGrid'); grid.innerHTML = '';
+  if (!HAB.length) { grid.innerHTML = '<div class="empty">Добавь первую привычку ниже ↓</div>'; return; }
+  let tOn=0, tAll=0;
+  // header
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;align-items:center;gap:6px;padding-bottom:7px;border-bottom:2px solid var(--g5);margin-bottom:4px';
+  hdr.innerHTML = `<div style="flex:1;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Привычка</div>
+    <div class="hdots">${DMON.map(d=>`<div class="hd" style="cursor:default;font-size:8px;background:var(--g5)">${d}</div>`).join('')}</div>
+    <div style="width:22px;text-align:right;font-size:10px;color:var(--muted)">🔥</div>`;
+  grid.appendChild(hdr);
+  HAB.forEach((h, hi) => {
+    const row = document.createElement('div'); row.className = 'hr';
+    let streak = 0;
+    for (let i=WD.length-1;i>=0;i--) { if(dd(dk(WD[i])).habits[hi]) streak++; else break; }
+    const dots = WD.map((d,di) => {
+      const key = dk(d); const on = !!(dd(key).habits[hi]);
+      if(on) tOn++; tAll++;
+      return `<div class="hd${on?' on':''}" data-k="${key}" data-hi="${hi}">${on?'✓':''}</div>`;
+    }).join('');
+    row.innerHTML = `<div class="hn" title="${esc(h)}">${esc(h)}</div><div class="hdots">${dots}</div><div class="hstr">${streak||''}</div>`;
+    grid.appendChild(row);
+  });
+  // attach events
+  grid.querySelectorAll('.hd[data-k]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.getAttribute('data-k'); const hi = +el.getAttribute('data-hi');
+      const data = dd(key); data.habits[hi] = !data.habits[hi];
+      el.className = 'hd'+(data.habits[hi]?' on':''); el.textContent = data.habits[hi]?'✓':'';
+      cloudSave(()=>{}); save(); renderHabits();
+      if(curPage==='home') renderRings(); if(curPage==='stats') renderStats();
+    });
+  });
+  document.getElementById('habPct').textContent = tAll?Math.round(tOn/tAll*100)+'%':'0%';
+}
+function addHabit() {
+  const inp = document.getElementById('habInp'); const v = inp.value.trim();
+  if(!v||HAB.length>=20) return; HAB.push(v); inp.value=''; cloudSave(()=>{}); save(); renderHabits();
+}
+
+// ── PROJECTS ──
+function initCpick() {
+  const el = document.getElementById('cpick'); el.innerHTML = '';
+  PCOLS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'co'+(c===selCol?' sel':''); d.style.background=c;
+    d.addEventListener('click', () => { selCol=c; initCpick(); });
+    el.appendChild(d);
+  });
+}
+function renderProjects() {
+  const list = document.getElementById('projList'); list.innerHTML = '';
+  document.getElementById('projBadge').textContent = PROJ.filter(p=>!p.arch).length+' активных';
+  if (!PROJ.length) { list.innerHTML = '<div class="empty">Создай первый проект ниже ↓</div>'; return; }
+  PROJ.forEach((p,pi) => {
+    const done=p.tasks.filter(x=>x.done).length; const total=p.tasks.length;
+    const pct=total?Math.round(done/total*100):0;
+    const today_=dk(tod()); const ov=p.dl&&p.dl<today_&&pct<100;
+    const card = document.createElement('div'); card.className='pc';
+    const dlHtml = p.dl?`<span class="pdl${ov?' ov':''}">${fmt(p.dl)}</span>`:'';
+    card.innerHTML = `
+      <div class="ph">
+        <div class="pdot" style="background:${p.col}"></div>
+        <div class="pn">${esc(p.name)}</div>${dlHtml}
+        <div class="pmeta">${done}/${total}</div>
+        <div id="parr${pi}" style="color:var(--muted);font-size:11px;margin-left:3px">▼</div>
+      </div>
+      <div class="ppbar"><div class="ppfill" style="width:${pct}%;background:${p.col}"></div></div>
+      <div class="ptasks" id="ptb${pi}">
+        <div id="ptlist${pi}"></div>
+        <div class="parow">
+          <input class="painp" id="painp${pi}" placeholder="Новая задача..." maxlength="80">
+          <button class="pabtn" data-pi="${pi}">+</button>
+        </div>
+      </div>`;
+    list.appendChild(card);
+    // tasks
+    const tlist = document.getElementById('ptlist'+pi);
+    p.tasks.forEach((t,ti) => {
+      const div = document.createElement('div'); div.className='pt'+(t.done?' done':'');
+      div.innerHTML = `<div class="ptck" style="${t.done?`background:${p.col};border-color:${p.col}`:''}"><span class="ptck-m">✓</span></div><div class="pt-t">${esc(t.text)}</div><button class="pt-del">×</button>`;
+      div.querySelector('.ptck').parentElement.onclick = () => { PROJ[pi].tasks[ti].done=!PROJ[pi].tasks[ti].done; cloudSave(()=>{}); save(); renderProjects(); if(curPage==='home')renderRings(); };
+      div.querySelector('.pt-del').onclick = e => { e.stopPropagation(); PROJ[pi].tasks.splice(ti,1); cloudSave(()=>{}); save(); renderProjects(); };
+      tlist.appendChild(div);
+    });
+    // collapse toggle
+    card.querySelector('.ph').addEventListener('click', () => {
+      const tb=document.getElementById('ptb'+pi); const arr=document.getElementById('parr'+pi);
+      tb.classList.toggle('hide'); arr.textContent=tb.classList.contains('hide')?'▶':'▼';
+    });
+    // add task button
+    card.querySelector('.pabtn').addEventListener('click', () => {
+      const inp = document.getElementById('painp'+pi); const v=inp.value.trim(); if(!v) return;
+      PROJ[pi].tasks.push({text:v,done:false}); inp.value=''; cloudSave(()=>{}); save(); renderProjects();
+    });
+    document.getElementById('painp'+pi).addEventListener('keydown', e => {
+      if(e.key==='Enter') { const v=e.target.value.trim(); if(!v) return; PROJ[pi].tasks.push({text:v,done:false}); e.target.value=''; cloudSave(()=>{}); save(); renderProjects(); }
+    });
+  });
+}
+function addProject() {
+  const name = document.getElementById('pjName').value.trim(); if(!name) return;
+  const dl = document.getElementById('pjDl').value||null;
+  PROJ.push({id:Date.now(),name,col:selCol,dl,tasks:[],arch:false});
+  document.getElementById('pjName').value=''; document.getElementById('pjDl').value='';
+  cloudSave(()=>{}); save(); renderProjects(); toast('✅ Проект создан');
+}
+function fmt(s){if(!s)return'';const[y,m,d]=s.split('-');return`${d}.${m}.${y}`;}
+
+// ── HEALTH ──
+function initHcButtons() {
+  document.querySelectorAll('#hcRow .tp').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const level = +btn.getAttribute('data-hc');
+      const key = dk(WD[selDay]); const data = dd(key);
+      data.headache = (data.headache===level ? null : level);
+      cloudSave(()=>{}); save(); renderHeadacheUI(key);
+    });
+  });
+}
+function renderHealth() {
+  const key = dk(WD[selDay]); const data = dd(key);
+  // Mood
+  const mr = document.getElementById('moodRow'); mr.innerHTML='';
+  MOODS.forEach((m,i) => {
+    const btn = document.createElement('button'); btn.className='mbtn'+(data.mood===i?' on':'');
+    btn.textContent=m; btn.title=MOOD_L[i];
+    btn.addEventListener('click', () => { data.mood=(data.mood===i?null:i); cloudSave(()=>{}); save(); renderHealth(); });
+    mr.appendChild(btn);
+  });
+  // Sliders
+  document.getElementById('slE').value=data.energy??3; document.getElementById('svE').textContent=data.energy??3;
+  document.getElementById('slS').value=data.stress??3; document.getElementById('svS').textContent=data.stress??3;
+  // Sleep
+  document.getElementById('hSlpH').value=data.sleepHours||'';
+  document.getElementById('hSlpT').value=data.sleepTime||'';
+  document.getElementById('hWake').value=data.wakeTime||'';
+  document.getElementById('slQ').value=data.sleepQuality??3; document.getElementById('svQ').textContent=data.sleepQuality??3;
+  document.getElementById('slpBadge').textContent=data.sleepHours?data.sleepHours+' ч':'— ч';
+  // Steps
+  document.getElementById('hSteps').value=data.steps||'';
+  const s=parseInt(data.steps)||0;
+  document.getElementById('sbarF').style.width=Math.min(100,Math.round(s/10000*100))+'%';
+  document.getElementById('stpBadge').textContent=s?s.toLocaleString('ru'):0;
+  // BP
+  renderBP(key);
+  // Headache
+  renderHeadacheUI(key);
+  // Smoke
+  document.getElementById('smkVal').textContent=data.smoke||0;
+  document.getElementById('smkBadge').textContent=(data.smoke||0)+' сиг.';
+  const sf=document.getElementById('sfTp');
+  sf.className='tp'+(data.smokeFree?' gr':''); sf.textContent=data.smokeFree?'✅ Без курения':'Отметить ✓';
+  let sfS=0; for(let i=selDay;i>=0;i--){if(dd(dk(WD[i])).smokeFree)sfS++;else break;}
+  document.getElementById('sfStreak').textContent=sfS>1?`🔥 Серия: ${sfS} дней`:'';
+  // Meds
+  renderMeds(key);
+  // Notes
+  const n=data.notes||{};
+  document.getElementById('nMain').value=n.main||'';
+  document.getElementById('nWins').value=n.wins||'';
+  document.getElementById('nThnk').value=n.thanks||'';
+}
+function onSl(k,v,vid){
+  document.getElementById(vid).textContent=v;
+  dd(dk(WD[selDay]))[k]=parseFloat(v); cloudSave(()=>{}); save();
+}
+function saveH(k,v){
+  const data=dd(dk(WD[selDay])); data[k]=v;
+  if(k==='steps'){const s=parseInt(v)||0;document.getElementById('sbarF').style.width=Math.min(100,Math.round(s/10000*100))+'%';document.getElementById('stpBadge').textContent=s?s.toLocaleString('ru'):0;}
+  if(k==='sleepHours')document.getElementById('slpBadge').textContent=v?v+' ч':'— ч';
+  cloudSave(()=>{}); save();
+}
+function renderBP(key){
+  const data=dd(key); const el=document.getElementById('bpHist'); el.innerHTML='';
+  if(!data.bp||!data.bp.length){el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:8px">Замеры не добавлены</div>';return;}
+  data.bp.slice().reverse().forEach((e,i)=>{
+    const ri=data.bp.length-1-i;
+    const div=document.createElement('div'); div.className='bpe';
+    div.innerHTML=`<div class="bpe-v">${e.sys}/${e.dia}</div><div class="bpe-d">${e.t}</div><button class="bpe-x" data-k="${key}" data-i="${ri}">×</button>`;
+    div.querySelector('.bpe-x').addEventListener('click',()=>{dd(key).bp.splice(ri,1);cloudSave(()=>{});save();renderBP(key);});
+    el.appendChild(div);
+  });
+}
+function addBP(){
+  const sys=parseInt(document.getElementById('bpS').value); const dia=parseInt(document.getElementById('bpD').value);
+  if(!sys||!dia||sys<60||dia<40){toast('⚠️ Введи корректное давление');return;}
+  const key=dk(WD[selDay]); const data=dd(key); if(!data.bp)data.bp=[];
+  const now=new Date(); data.bp.push({sys,dia,t:now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+  document.getElementById('bpS').value=''; document.getElementById('bpD').value='';
+  cloudSave(()=>{}); save(); renderBP(key); toast('✅ Давление записано');
+}
+function renderHeadacheUI(key){
+  const data=dd(key); const h=data.headache;
+  document.querySelectorAll('#hcRow .tp').forEach((btn,i)=>{btn.className='tp'+(h===i?' '+HC_C[i]:'');});
+  document.getElementById('hcBadge').textContent=h!=null?HC_L[h]:'Нет';
+  const log=document.getElementById('hcLog'); log.innerHTML='';
+  WD.forEach((d,i)=>{
+    const d2=dd(dk(d)); if(d2.headache!=null&&d2.headache>0){
+      const div=document.createElement('div'); div.className='hce';
+      div.innerHTML=`<div class="hce-d">${DMON[i]} ${d.getDate()}</div><div class="hce-i">${HC_L[d2.headache]}</div>`;
+      log.appendChild(div);
+    }
+  });
+  if(!log.children.length)log.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:6px">На этой неделе не было 🎉</div>';
+}
+function changeSmoke(delta){
+  const key=dk(WD[selDay]); const data=dd(key);
+  data.smoke=Math.max(0,(data.smoke||0)+delta);
+  document.getElementById('smkVal').textContent=data.smoke;
+  document.getElementById('smkBadge').textContent=data.smoke+' сиг.';
+  cloudSave(()=>{}); save();
+}
+function toggleSmokeFree(){
+  const key=dk(WD[selDay]); const data=dd(key);
+  data.smokeFree=!data.smokeFree; cloudSave(()=>{}); save(); renderHealth();
+}
+function renderMeds(key){
+  const data=dd(key); const list=document.getElementById('medList'); list.innerHTML='';
+  let checked=0;
+  MEDS.forEach((m,i)=>{
+    const on=!!(data.medsChecked&&data.medsChecked[i]); if(on)checked++;
+    const div=document.createElement('div'); div.className='med';
+    div.innerHTML=`<div class="medck${on?' on':''}" data-i="${i}"><span class="medck-m">✓</span></div><div class="med-n">${esc(m)}</div><button class="med-x" data-i="${i}">×</button>`;
+    div.querySelector('.medck').addEventListener('click',()=>{
+      if(!data.medsChecked)data.medsChecked={};
+      data.medsChecked[i]=!data.medsChecked[i];
+      cloudSave(()=>{}); save(); renderMeds(key);
+    });
+    div.querySelector('.med-x').addEventListener('click',()=>{MEDS.splice(i,1);cloudSave(()=>{}); save(); renderMeds(key);});
+    list.appendChild(div);
+  });
+  document.getElementById('medBadge').textContent=`${checked}/${MEDS.length}`;
+  if(!MEDS.length)list.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">Добавь лекарства ниже ↓</div>';
+}
+function addMed(){
+  const inp=document.getElementById('medInp'); const v=inp.value.trim(); if(!v)return;
+  MEDS.push(v); inp.value=''; cloudSave(()=>{}); save(); renderMeds(dk(WD[selDay]));
+}
+function saveNote(k,v){
+  const data=dd(dk(WD[selDay])); if(!data.notes)data.notes={};
+  data.notes[k]=v; cloudSave(()=>{}); save();
+}
+
+// ── STATS ──
+function renderStats(){
+  let wD=0,wT=0,hD=0,hT=0,mS=0,mC=0,totS=0,haches=0;
+  WD.forEach(d=>{
+    const data=dd(dk(d)); wD+=data.tasks.filter(x=>x.done).length; wT+=data.tasks.length;
+    HAB.forEach((_,i)=>{hT++;if(data.habits[i])hD++;});
+    if(data.mood!=null){mS+=data.mood+1;mC++;}
+    totS+=parseInt(data.steps)||0;
+    if(data.headache!=null&&data.headache>0)haches++;
+  });
+  let pD=0,pT=0; PROJ.forEach(p=>p.tasks.forEach(t=>{pT++;if(t.done)pD++;}));
+  document.getElementById('spills').innerHTML=`
+    <div class="sp"><div class="sp-n">${wT?Math.round(wD/wT*100):0}%</div><div class="sp-l">Задачи</div></div>
+    <div class="sp"><div class="sp-n">${hT?Math.round(hD/hT*100):0}%</div><div class="sp-l">Привычки</div></div>
+    <div class="sp"><div class="sp-n">${pT?Math.round(pD/pT*100):0}%</div><div class="sp-l">Проекты</div></div>
+    <div class="sp"><div class="sp-n">${mC?(mS/mC).toFixed(1):'—'}</div><div class="sp-l">Настроение</div></div>
+    <div class="sp"><div class="sp-n">${Math.round(totS/7/1000*10)/10}k</div><div class="sp-l">Шагов/день</div></div>
+    <div class="sp"><div class="sp-n">${haches}</div><div class="sp-l">Мигрени</div></div>`;
+  // Habits
+  const sh=document.getElementById('stHab'); sh.innerHTML='';
+  if(!HAB.length){sh.innerHTML='<div class="empty">Нет привычек</div>';return;}
+  HAB.forEach((h,hi)=>{
+    let d=0; WD.forEach(x=>{if(dd(dk(x)).habits[hi])d++;});
+    const pct=Math.round(d/7*100);
+    sh.innerHTML+=`<div class="ab"><div class="ab-n" title="${esc(h)}">${esc(h.length>14?h.slice(0,14)+'…':h)}</div><div class="ab-tr"><div class="ab-f" style="width:${pct}%"></div></div><div class="ab-p">${pct}%</div></div>`;
+  });
+  // Tasks
+  const st=document.getElementById('stTask'); st.innerHTML='';
+  WD.forEach((d,i)=>{
+    const data=dd(dk(d)); const dn=data.tasks.filter(x=>x.done).length; const tn=data.tasks.length;
+    const p=tn?Math.round(dn/tn*100):0; const isT=d.getTime()===tod().getTime();
+    st.innerHTML+=`<div class="ab"><div class="ab-n" style="${isT?'font-weight:900;color:var(--g1)':''}">${DMON[i]} ${d.getDate()}</div><div class="ab-tr"><div class="ab-f" style="width:${p}%"></div></div><div class="ab-p">${dn}/${tn}</div></div>`;
+  });
+  // Health
+  const sh2=document.getElementById('stHealth'); sh2.innerHTML='';
+  WD.forEach((d,i)=>{
+    const data=dd(dk(d));
+    const sl=data.sleepHours||'—'; const sp=(parseInt(data.steps)||0).toLocaleString('ru');
+    const mood=data.mood!=null?MOODS[data.mood]:'—';
+    const slP=data.sleepHours?Math.min(100,Math.round(parseFloat(data.sleepHours)/9*100)):0;
+    const spP=data.steps?Math.min(100,Math.round((parseInt(data.steps)||0)/10000*100)):0;
+    sh2.innerHTML+=`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:800">${DMON[i]} ${d.getDate()}</span>
+        <span style="font-size:10px;color:var(--muted)">${mood} · ${sl}ч · ${sp} шагов</span>
+      </div>
+      <div class="ab-tr" style="margin-bottom:3px"><div class="ab-f" style="width:${slP}%;background:linear-gradient(90deg,#0d47a1,#42a5f5)"></div></div>
+      <div class="ab-tr"><div class="ab-f" style="width:${spP}%;background:linear-gradient(90deg,#bf360c,#ffc107)"></div></div>
+    </div>`;
+  });
+}
+
+// ── RERENDER ──
+function rerender(){
+  save();
+  renderHomeTasks(); renderRings();
+  if(curPage==='tasks') renderTasks();
+  if(curPage==='habits') renderHabits();
+  if(curPage==='stats') renderStats();
+  if(curPage==='projects') renderProjects();
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── BOOT ──
+cloudLoad(() => { if(!HAB.length) HAB=[...DEF_HAB]; init(); });
+
+// Fix pages offset after render
+function fixLayout() {
+  const tb = document.querySelector('.tb');
+  const bnav = document.querySelector('.bnav');
+  const pages = document.querySelector('.pages');
+  if (tb && bnav && pages) {
+    pages.style.paddingTop = tb.offsetHeight + 'px';
+    pages.style.paddingBottom = bnav.offsetHeight + 'px';
+  }
+}
+window.addEventListener('load', fixLayout);
+window.addEventListener('resize', fixLayout);
+setTimeout(fixLayout, 300);
+</script>
+</body>
+</html>
