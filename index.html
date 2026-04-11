@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Life Tracker</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
 /* ═══ TOKENS ════════════════════════════════════ */
@@ -866,6 +868,36 @@ function dd(k){
 const todI=()=>{const t=tod().getTime();const i=WK.findIndex(d=>d.getTime()===t);return i>=0?i:0;};
 
 /* ════════════════════════════════════════════════
+   FIREBASE CONFIG
+   ↓ Заполни своими данными: Firebase Console → Project Settings → Your apps
+════════════════════════════════════════════════ */
+const FB_CONFIG={
+  apiKey:            "AIzaSyD4lSQxttNgEWkRcTQEzlcYnu0NsNT-lx0",
+  authDomain:        "life-tracker-3c44e.firebaseapp.com",
+  projectId:         "life-tracker-3c44e",
+  storageBucket:     "life-tracker-3c44e.firebasestorage.app",
+  messagingSenderId: "1029425542798",
+  appId:             "1:1029425542798:web:b51e5e8427fff5da70bbdf"
+};
+const FB_ENABLED=!FB_CONFIG.apiKey.startsWith('REPLACE');
+let fbDb=null;
+
+function getOrCreateUserId(){
+  let id=localStorage.getItem('_lt_uid');
+  if(!id){id=Date.now().toString(36)+Math.random().toString(36).slice(2);localStorage.setItem('_lt_uid',id);}
+  return id;
+}
+const fbUserId=(()=>{const tId=window.Telegram?.WebApp?.initDataUnsafe?.user?.id;return tId?String(tId):getOrCreateUserId();})();
+
+if(FB_ENABLED){
+  try{
+    const fbApp=firebase.initializeApp(FB_CONFIG);
+    fbDb=firebase.firestore(fbApp);
+    fbDb.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  }catch(e){console.warn('Firebase init error',e);}
+}
+
+/* ════════════════════════════════════════════════
    STORAGE
 ════════════════════════════════════════════════ */
 const save=()=>{
@@ -873,50 +905,68 @@ const save=()=>{
     localStorage.setItem(SK,JSON.stringify({DB,HABS,PROJS,MEDS,CATS,FIN_CATS,FINS,PROFILE,CUSTOM_METRICS,VICES}));
   }catch(e){}
 };
+function applyData(p){
+  DB=p.DB||{};
+  HABS=p.HABS||[...DEF_HABS];
+  PROJS=p.PROJS||[];
+  MEDS=p.MEDS||[];
+  CATS=p.CATS||[...DEF_CATS];
+  FIN_CATS=p.FIN_CATS||[...DEF_FIN_CATS];
+  FINS=p.FINS||[];
+  PROFILE=p.PROFILE||{};
+  CUSTOM_METRICS=p.CUSTOM_METRICS||[];
+  VICES=p.VICES||[...DEF_VICES];
+  Object.values(DB).forEach(d=>{
+    if(d.tasks)d.tasks=d.tasks.map(t=>typeof t==='string'?{text:t,done:false,category:'',priority:'in'}:(t.category===undefined?{...t,category:'',priority:t.priority||'in'}:t));
+  });
+}
 function load(){
   try{
     const r=localStorage.getItem(SK);
-    if(r){
-      const p=JSON.parse(r);
-      DB=p.DB||{};
-      HABS=p.HABS||[...DEF_HABS];
-      PROJS=p.PROJS||[];
-      MEDS=p.MEDS||[];
-      CATS=p.CATS||[...DEF_CATS];
-      FIN_CATS=p.FIN_CATS||[...DEF_FIN_CATS];
-      FINS=p.FINS||[];
-      PROFILE=p.PROFILE||{};
-      CUSTOM_METRICS=p.CUSTOM_METRICS||[];
-      VICES=p.VICES||[...DEF_VICES];
-      // MIGRATION: convert old task format (string check → object)
-      Object.values(DB).forEach(d=>{
-        if(d.tasks)d.tasks=d.tasks.map(t=>typeof t==='string'?{text:t,done:false,category:'',priority:'in'}:(t.category===undefined?{...t,category:'',priority:t.priority||'in'}:t));
-      });
-      return true;
-    }
+    if(r){applyData(JSON.parse(r));return true;}
   }catch(e){}
   return false;
 }
 const hasTg=()=>!!(TG&&TG.CloudStorage);
-function cloudSave(cb){
-  if(!hasTg()){save();cb?.();return;}
-  TG.CloudStorage.setItem(CK,JSON.stringify({DB,HABS,PROJS,MEDS,CATS,FIN_CATS,FINS,PROFILE,CUSTOM_METRICS,VICES}),e=>{save();cb?.(e);});
+
+let _fbTimer=null;
+function fbSaveNow(cb){
+  if(!fbDb){save();cb?.(null);return;}
+  fbDb.collection('users').doc(fbUserId).set({
+    DB,HABS,PROJS,MEDS,CATS,FIN_CATS,FINS,PROFILE,CUSTOM_METRICS,VICES,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>cb?.(null)).catch(e=>{console.warn('fbSave err',e);cb?.(e);});
 }
-function cloudLoad(cb){
-  if(!hasTg()){load();cb();return;}
-  TG.CloudStorage.getItem(CK,(e,v)=>{
-    if(!e&&v){
-      try{
-        const p=JSON.parse(v);
-        DB=p.DB||{};HABS=p.HABS||[...DEF_HABS];PROJS=p.PROJS||[];MEDS=p.MEDS||[];
-        CATS=p.CATS||[...DEF_CATS];FIN_CATS=p.FIN_CATS||[...DEF_FIN_CATS];
-        FINS=p.FINS||[];PROFILE=p.PROFILE||{};CUSTOM_METRICS=p.CUSTOM_METRICS||[];VICES=p.VICES||[...DEF_VICES];
-        Object.values(DB).forEach(d=>{if(d.tasks)d.tasks=d.tasks.map(t=>typeof t==='string'?{text:t,done:false,category:'',priority:'in'}:(t.category===undefined?{...t,category:'',priority:t.priority||'in'}:t));});
+function cloudSave(cb){
+  save();
+  if(cb){
+    fbSaveNow(cb);
+  }else{
+    clearTimeout(_fbTimer);
+    _fbTimer=setTimeout(()=>fbSaveNow(),2000);
+  }
+}
+async function cloudLoad(cb){
+  if(fbDb){
+    try{
+      const snap=await fbDb.collection('users').doc(fbUserId).get();
+      if(snap.exists){
+        applyData(snap.data());
         save();
-      }catch(_){load();}
-    }else load();
+        cb();
+        return;
+      }
+    }catch(e){console.warn('fbLoad err',e);}
+  }
+  if(hasTg()){
+    TG.CloudStorage.getItem(CK,(e,v)=>{
+      if(!e&&v){try{applyData(JSON.parse(v));save();}catch(_){load();}}else load();
+      cb();
+    });
+  }else{
+    load();
     cb();
-  });
+  }
 }
 
 /* ════════════════════════════════════════════════
