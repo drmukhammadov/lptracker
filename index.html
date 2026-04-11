@@ -197,7 +197,8 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);-web
 .h3col>.hsec{flex:1;margin-bottom:0;}
 /* profile row */
 .profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.profile-field{display:flex;flex-direction:column;gap:5px;}
+.profile-field{display:flex;flex-direction:column;gap:5px;min-width:0;overflow:hidden;}
+.profile-field:nth-child(even){text-align:right;align-items:flex-end;}
 .profile-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
 .profile-val{font-size:16px;font-weight:900;color:var(--text);font-family:'JetBrains Mono',monospace;}
 .profile-sub{font-size:10px;color:var(--muted);font-weight:600;}
